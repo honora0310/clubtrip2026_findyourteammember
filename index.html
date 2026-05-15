@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>拼圖尋緣：分組猜謎</title>
+    <!-- 引入 Tailwind CSS 與 Lucide 圖標 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;700&family=Noto+Sans+TC:wght@300;400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --zen-beige: #F9F7F2;
+            --zen-brown: #8B735B;
+            --zen-green: #8A9A5B;
+            --zen-dark: #2C3E50;
+            --zen-tan: #D2B48C;
+        }
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: var(--zen-beige);
+            color: var(--zen-dark);
+            margin: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+        .serif { font-family: 'Noto Serif TC', serif; }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(15px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fadeIn { animation: fadeIn 0.6s ease-out forwards; }
+        
+        .progress-bar {
+            transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        .btn-zen {
+            background-color: var(--zen-brown);
+            color: white;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .btn-zen:hover { 
+            background-color: #6D5A47; 
+            transform: translateY(-2px); 
+            box-shadow: 0 4px 12px rgba(109, 90, 71, 0.3); 
+        }
+        .btn-zen:active { transform: translateY(0); }
+
+        .input-zen {
+            border: 2px solid var(--zen-tan);
+            transition: all 0.3s;
+            background: rgba(255, 255, 255, 0.6);
+        }
+        .input-zen:focus {
+            border-color: var(--zen-brown);
+            background: white;
+            box-shadow: 0 0 0 4px rgba(139, 115, 91, 0.1);
+        }
+
+        /* 核心：自動切圖的 CSS 樣式 */
+        .puzzle-piece {
+            width: 100%;
+            height: 100%;
+            background-size: 200% 200%; /* 將背景放大到 2 倍，剛好可以切成 4 等分 */
+            background-repeat: no-repeat;
+        }
+        /* 根據使用者的序號 (partNum) 決定顯示哪一個象限 */
+        .piece-1 { background-position: 0% 0%; }     /* 左上 */
+        .piece-2 { background-position: 100% 0%; }   /* 右上 */
+        .piece-3 { background-position: 0% 100%; }   /* 左下 */
+        .piece-4 { background-position: 100% 100%; } /* 右下 */
+    </style>
+</head>
+<body>
+
+<div id="app" class="w-full max-w-md bg-white rounded-[2.5rem] shadow-2xl overflow-hidden border border-[#D2B48C]/20 flex flex-col min-h-[680px] m-4 relative">
+    
+    <!-- 頂部進度條 -->
+    <div class="h-1.5 bg-[#D2B48C]/10 w-full overflow-hidden">
+        <div id="progress" class="h-full bg-[#8B735B] progress-bar w-0"></div>
+    </div>
+
+    <!-- 內容動態注入區 -->
+    <div id="content" class="flex-grow p-8 flex flex-col justify-center overflow-y-auto no-scrollbar">
+    </div>
+
+    <!-- 頁尾裝飾 -->
+    <div class="p-4 flex justify-between items-center opacity-40 bg-stone-50 mt-auto text-[10px] tracking-[0.2em] font-bold uppercase border-t border-stone-100">
+        <i data-lucide="leaf" class="w-3 h-3 text-[#8A9A5B]"></i>
+        <span class="text-stone-500">「陶」冶自性，「瓷」刻禪心</span>
+        <i data-lucide="leaf" class="w-3 h-3 text-[#8A9A5B] transform scale-x-[-1]"></i>
+    </div>
+</div>
+
+<script>
+    // 資料結構
+    const groups = [
+        {
+            leaderName: "胡博鈞",
+            leaderPhone: "0902-183-890",
+            members: ["黃歆茹", "黃涵瑩", "林祐昇", "劉柔廷"],
+            correctAnswers: ["中台禪寺"] 
+        },
+        {
+            leaderName: "邱冠雅",
+            leaderPhone: "0933-966-978",
+            members: ["黃詠暉", "周威廷", "黃苡容", "莊意如"],
+            correctAnswers: ["金頂娃娃"] 
+        },
+        {
+            leaderName: "陳柏安",
+            leaderPhone: "0906-276-696",
+            members: ["王云芷", "蘇珮淇", "吳柏彥", "陳蓮瑞"],
+            correctAnswers: ["白鹿", "鹿"] 
+        },
+        {
+            leaderName: "林俞岑",
+            leaderPhone: "0981-178-398",
+            members: ["呂怡賢", "林琬倩", "蕭姵琪", "施宛廷"], 
+            correctAnswers: ["白象", "大象", "象"] 
+        },
+        {
+            leaderName: "王印晨",
+            leaderPhone: "0911-905-525",
+            members: ["吳宣慧", "吳奇勳", "鄭閔中", "陳昶任"],
+            correctAnswers: ["白獅", "獅子", "獅"] 
+        }
+    ];
+
+    const state = {
+        stage: 'page1',
+        user: { name: "", groupIndex: -1, groupNum: 0, partNum: 0, leaderName: "", leaderPhone: "" },
+        answer: ""
+    };
+
+    function updateProgress() {
+        const progressBar = document.getElementById('progress');
+        if (state.stage === 'page1') progressBar.style.width = '33.3%';
+        else if (state.stage === 'page2') progressBar.style.width = '66.6%';
+        else if (state.stage === 'page3') progressBar.style.width = '100%';
+    }
+
+    function setStage(newStage) {
+        state.stage = newStage;
+        render();
+        document.getElementById('content').scrollTop = 0;
+    }
+
+    function handlePage1Submit() {
+        const nameInput = document.getElementById('userName').value.trim();
+        if (!nameInput) {
+            alert('請輸入您的姓名以尋找緣起。');
+            return;
+        }
+
+        let found = false;
+        for (let g = 0; g < groups.length; g++) {
+            const seatIndex = groups[g].members.indexOf(nameInput);
+            if (seatIndex !== -1) {
+                state.user.name = nameInput;
+                state.user.groupIndex = g; 
+                state.user.groupNum = g + 1;       
+                state.user.partNum = seatIndex + 1; 
+                state.user.leaderName = groups[g].leaderName;
+                state.user.leaderPhone = groups[g].leaderPhone;
+                found = true;
+                break;
+            }
+        }
+
+        if (!found) {
+            alert('❌ 名字不在預設名單中，請重新輸入。');
+            return; 
+        }
+
+        setStage('page2');
+    }
+
+    function handlePage2Submit() {
+        const answerInput = document.getElementById('imageAnswer').value.trim();
+        if (!answerInput) {
+            alert('請輸入您參透的圖片名稱。');
+            return;
+        }
+
+        const allowedAnswers = groups[state.user.groupIndex].correctAnswers;
+        const isCorrect = allowedAnswers.some(ans => 
+            ans.toLowerCase() === answerInput.toLowerCase()
+        );
+
+        if (isCorrect) {
+            state.answer = answerInput;
+            setStage('page3');
+        } else {
+            alert('❌ 謎題尚未參透，這個答案不對唷，再仔細觀察看看圖片吧！');
+        }
+    }
+
+    function handleReset() {
+        state.user = { name: "", groupIndex: -1, groupNum: 0, partNum: 0, leaderName: "", leaderPhone: "" };
+        state.answer = "";
+        setStage('page1');
+    }
+
+    // 用於前端預檢圖片是否存在的輔助函式
+    function checkImageExists(url, callback) {
+        const img = new Image();
+        img.onload = function() { callback(true); };
+        img.onerror = function() { callback(false); };
+        img.src = url;
+    }
+
+    function render() {
+        const container = document.getElementById('content');
+        updateProgress();
+        let html = '';
+        const fadeClass = "animate-fadeIn flex flex-col gap-6";
+
+        switch (state.stage) {
+            case 'page1':
+                html = `
+                <div class="${fadeClass} text-center py-4">
+                    <div class="w-16 h-16 mx-auto border-2 border-[#8B735B] rounded-full flex items-center justify-center mb-2">
+                        <span class="text-3xl text-[#8B735B]">卍</span>
+                    </div>
+                    <h1 class="text-2xl font-bold serif tracking-wide">尋緣識組</h1>
+                    <p class="text-stone-500 text-sm px-4 italic">「名乃緣之始」<br>請輸入您的姓名，開啟專屬的線索拼圖</p>
+                    
+                    <div class="mt-4 relative">
+                        <input id="userName" type="text" placeholder="請輸入姓名..." autocomplete="off"
+                            class="w-full px-6 py-4 input-zen rounded-2xl text-center font-medium outline-none">
+                    </div>
+                    
+                    <button onclick="handlePage1Submit()" class="btn-zen w-full py-4 rounded-2xl font-bold shadow-lg mt-2 serif tracking-widest text-lg">
+                        尋找線索 <i data-lucide="chevron-right" class="inline w-5 h-5 align-text-bottom"></i>
+                    </button>
+                </div>`;
+                container.innerHTML = html;
+                lucide.createIcons();
+                break;
+
+            case 'page2':
+                // 讀取該組大圖檔案名稱（例如第1組就是 1.png）
+                const bigImgName = `${state.user.groupNum}.png`;
+                const pieceClass = `piece-${state.user.partNum}`; // 對應 CSS 的切圖位置
+                
+                html = `
+                <div class="${fadeClass}">
+                    <div class="text-center">
+                        <h2 class="text-[#8A9A5B] font-bold flex items-center justify-center gap-2 serif text-xl">
+                            <i data-lucide="image" class="w-5 h-5"></i> 專屬碎片線索
+                        </h2>
+                    </div>
+
+                    <!-- 圖片切圖觀景窗 -->
+                    <div class="w-56 h-56 mx-auto bg-stone-50 border-4 border-dashed border-[#D2B48C]/60 rounded-3xl overflow-hidden flex items-center justify-center shadow-inner relative">
+                        
+                        <!-- 自動切圖顯示層 -->
+                        <div id="puzzleView" class="puzzle-piece ${pieceClass} z-10 hidden" style="background-image: url('${bigImgName}');"></div>
+                        
+                        <!-- 錯誤提示底層 -->
+                        <div id="imgErrorMessage" class="absolute inset-0 flex flex-col items-center justify-center text-center p-4 bg-stone-100 text-stone-400 z-0">
+                            <i data-lucide="image-off" class="w-8 h-8 mb-2 text-stone-300"></i>
+                            <span class="text-[11px] leading-relaxed px-2 font-medium">找不到大圖檔！<br>請將該組大圖命名為：<br><strong class="text-[#8B735B] font-mono">${bigImgName}</strong><br>並與此網頁放在同個資料夾</span>
+                        </div>
+                    </div>
+
+                    <div class="space-y-2 mt-2">
+                        <label class="text-xs font-bold text-[#8B735B] tracking-wider block pl-1">輸入圖片名稱（您猜測的答案）：</label>
+                        <div class="relative">
+                            <input id="imageAnswer" type="text" placeholder="在此寫下您的答案..." autocomplete="off"
+                                class="w-full px-6 py-4 input-zen rounded-2xl text-center outline-none">
+                        </div>
+                    </div>
+
+                    <button onclick="handlePage2Submit()" class="btn-zen w-full py-4 rounded-2xl font-bold shadow-lg mt-2 tracking-widest serif">
+                        提交並查看組別訊息
+                    </button>
+                </div>`;
+                
+                container.innerHTML = html;
+                lucide.createIcons();
+
+                // 異步檢查實體大圖是否存在，存在才秀出切好的局部圖
+                checkImageExists(bigImgName, function(exists) {
+                    if (exists) {
+                        document.getElementById('puzzleView').classList.remove('hidden');
+                        document.getElementById('imgErrorMessage').classList.add('hidden');
+                    }
+                });
+                break;
+
+            case 'page3':
+                html = `
+                <div class="${fadeClass} text-center py-4">
+                    <div class="w-16 h-16 bg-[#8A9A5B]/10 rounded-full flex items-center justify-center mx-auto mb-2 animate-pulse">
+                        <i data-lucide="check-circle" class="w-10 h-10 text-[#8A9A5B]"></i>
+                    </div>
+                    <h2 class="text-2xl font-bold text-[#8B735B] serif tracking-wide">組別訊息查核</h2>
+                    
+                    <div class="bg-[#FDFBF7] p-6 rounded-3xl border border-[#D2B48C]/30 text-left space-y-4 shadow-sm mt-2">
+                        <div class="flex justify-between items-center border-b border-stone-100 pb-2">
+                            <span class="text-stone-400 text-xs">玩家姓名</span>
+                            <span class="font-bold text-stone-700 text-base">${state.user.name}</span>
+                        </div>
+                        <div class="flex justify-between items-center border-b border-stone-100 pb-2">
+                            <span class="text-stone-400 text-xs">分配組別</span>
+                            <span class="font-bold text-xl text-[#8A9A5B] serif">第 ${state.user.groupNum} 組</span>
+                        </div>
+                        
+                        <div class="bg-stone-50/60 p-4 rounded-2xl border border-stone-100 space-y-2.5">
+                            <div class="text-xs font-bold text-stone-400 uppercase tracking-wider mb-1">隊長訊息線索</div>
+                            <div class="flex items-center gap-2 text-stone-700">
+                                <i data-lucide="user" class="w-4 h-4 text-[#8B735B]"></i>
+                                <span class="text-xs text-stone-400">姓名：</span>
+                                <span class="font-bold text-sm">${state.user.leaderName}</span>
+                            </div>
+                            <div class="flex items-center gap-2 text-stone-700">
+                                <i data-lucide="phone" class="w-4 h-4 text-[#8A9A5B]"></i>
+                                <span class="text-xs text-stone-400">電話：</span>
+                                <span class="font-mono text-sm tracking-wide">${state.user.leaderPhone}</span>
+                            </div>
+                        </div>
+
+                        <a href="tel:${state.user.leaderPhone}" class="flex items-center justify-center gap-2 w-full py-3 bg-[#8A9A5B] hover:bg-[#738249] text-white rounded-xl text-sm font-bold tracking-wider shadow-md transition-all active:scale-[0.98]">
+                            <i data-lucide="phone-call" class="w-4 h-4"></i>
+                            聯繫隊長（撥打電話）
+                        </a>
+                    </div>
+
+                    <button onclick="handleReset()" class="text-stone-400 text-xs hover:underline mt-6 flex items-center justify-center gap-1 mx-auto transition-all">
+                        <i data-lucide="refresh-cw" class="w-3 h-3"></i> 重新輸入姓名
+                    </button>
+                </div>`;
+                container.innerHTML = html;
+                lucide.createIcons();
+                break;
+        }
+    }
+
+    window.onload = render;
+</script>
+</body>
+</html>
