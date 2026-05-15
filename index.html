@@ -64,7 +64,7 @@
             box-shadow: 0 0 0 4px rgba(139, 115, 91, 0.1);
         }
 
-        /* 核心優化：開啟顯示卡硬體加速，解決切圖突發性 Lag */
+        /* 核心優化：保持硬體加速，放大倍率維持 200% (4倍局部) */
         .puzzle-piece {
             width: 100%;
             height: 100%;
@@ -73,10 +73,11 @@
             will-change: background-position;
             transform: translateZ(0); 
         }
-        .piece-1 { background-position: 0% 0%; }     /* 左上 */
-        .piece-2 { background-position: 100% 0%; }   /* 右上 */
-        .piece-3 { background-position: 0% 100%; }   /* 左下 */
-        .piece-4 { background-position: 100% 100%; } /* 右下 */
+        /* 保留一般隊員的四等份定義 */
+        .piece-1 { background-position: 0% 0%; }     
+        .piece-2 { background-position: 100% 0%; }   
+        .piece-3 { background-position: 0% 100%; }   
+        .piece-4 { background-position: 100% 100%; } 
     </style>
 </head>
 <body>
@@ -136,9 +137,18 @@
 
     const state = {
         stage: 'page1',
-        user: { name: "", groupIndex: -1, groupNum: 0, partNum: 0, leaderName: "", leaderPhone: "" },
+        user: { 
+            name: "", 
+            groupIndex: -1, 
+            groupNum: 0, 
+            partNum: 0, 
+            leaderName: "", 
+            leaderPhone: "",
+            isLeader: false,        // 新增：註記是否為隊長
+            customPos: { x: 0, y: 0 } // 新增：儲存隊長的隨機座標
+        },
         answer: "",
-        isImgReady: false // 新增：用來記錄圖片是否順利加載成功
+        isImgReady: false 
     };
 
     function updateProgress() {
@@ -162,32 +172,45 @@
         }
 
         let found = false;
-        let gIndex = -1, sIndex = -1;
+        let gIndex = -1, sIndex = -1, isLeader = false;
+        let customX = 0, customY = 0;
 
         for (let g = 0; g < groups.length; g++) {
-            const seatIndex = groups[g].members.indexOf(nameInput);
-            if (seatIndex !== -1) {
+            if (groups[g].leaderName === nameInput) {
                 gIndex = g;
-                sIndex = seatIndex;
+                isLeader = true;
+                // 【核心改動】不拿 1~4 序號，而是直接隨機甩出 0% ~ 100% 的任意背景座標
+                customX = Math.floor(Math.random() * 101);
+                customY = Math.floor(Math.random() * 101);
                 found = true;
                 break;
+            } else {
+                const seatIndex = groups[g].members.indexOf(nameInput);
+                if (seatIndex !== -1) {
+                    gIndex = g;
+                    sIndex = seatIndex;
+                    found = true;
+                    break;
+                }
             }
         }
 
         if (!found) {
-            alert('❌ 名字不在預設名單中，請重新輸入。');
+            alert('❌ 名字不在預設名單或隊長名單中，請重新輸入。');
             return; 
         }
 
-        // 寫入基本狀態
+        // 寫入狀態
         state.user.name = nameInput;
         state.user.groupIndex = gIndex; 
         state.user.groupNum = gIndex + 1;       
-        state.user.partNum = sIndex + 1; 
+        state.user.partNum = sIndex + 1; // 隊員專用 (1~4)
+        state.user.isLeader = isLeader;
+        state.user.customPos = { x: customX, y: customY }; // 隊長專用隨機點
         state.user.leaderName = groups[gIndex].leaderName;
         state.user.leaderPhone = groups[gIndex].leaderPhone;
 
-        // 【核心優化】在 Page 1 提交時立刻進行圖片預加載，確保進入 Page 2 時順暢無阻
+        // 預加載圖片
         const targetImgUrl = `${state.user.groupNum}.png`;
         const preloader = new Image();
         
@@ -198,7 +221,7 @@
         
         preloader.onerror = function() {
             state.isImgReady = false;
-            setStage('page2'); // 即使失敗也進入，會自動顯示錯誤提示
+            setStage('page2'); 
         };
 
         preloader.src = targetImgUrl;
@@ -225,7 +248,7 @@
     }
 
     function handleReset() {
-        state.user = { name: "", groupIndex: -1, groupNum: 0, partNum: 0, leaderName: "", leaderPhone: "" };
+        state.user = { name: "", groupIndex: -1, groupNum: 0, partNum: 0, leaderName: "", leaderPhone: "", isLeader: false, customPos: { x: 0, y: 0 } };
         state.answer = "";
         state.isImgReady = false;
         setStage('page1');
@@ -262,27 +285,33 @@
 
             case 'page2':
                 const bigImgName = `${state.user.groupNum}.png`;
-                const pieceClass = `piece-${state.user.partNum}`;
-                
-                // 根據預載入結果決定誰隱藏、誰顯示
                 const viewHiddenClass = state.isImgReady ? "" : "hidden";
                 const errorHiddenClass = state.isImgReady ? "hidden" : "";
+
+                // 判斷是隊長還是隊員，決定要注入什麼樣的 CSS Style
+                let inlineStyle = `background-image: url('${bigImgName}');`;
+                let pieceClass = '';
+
+                if (state.user.isLeader) {
+                    // 隊長：動態塞入完全隨機的背景座標百分比
+                    inlineStyle += ` background-position: ${state.user.customPos.x}% ${state.user.customPos.y}%;`;
+                } else {
+                    // 一般隊員：沿用原本固定的 1~4 象限 Class
+                    pieceClass = `piece-${state.user.partNum}`;
+                }
 
                 html = `
                 <div class="${fadeClass}">
                     <div class="text-center">
                         <h2 class="text-[#8A9A5B] font-bold flex items-center justify-center gap-2 serif text-xl">
-                            <i data-lucide="image" class="w-5 h-5"></i> 專屬碎片線索
+                            <i data-lucide="image" class="w-5 h-5"></i> 專屬碎片線索 ${state.user.isLeader ? '<span class="text-xs bg-[#8B735B] text-white px-2 py-0.5 rounded-full font-sans"></span>' : ''}
                         </h2>
                     </div>
 
                     <!-- 圖片切圖觀景窗 -->
                     <div class="w-56 h-56 mx-auto bg-stone-50 border-4 border-dashed border-[#D2B48C]/60 rounded-3xl overflow-hidden flex items-center justify-center shadow-inner relative">
+                        <div id="puzzleView" class="puzzle-piece ${pieceClass} z-10 ${viewHiddenClass}" style="${inlineStyle}"></div>
                         
-                        <!-- 自動切圖顯示層 -->
-                        <div id="puzzleView" class="puzzle-piece ${pieceClass} z-10 ${viewHiddenClass}" style="background-image: url('${bigImgName}');"></div>
-                        
-                        <!-- 錯誤提示底層 -->
                         <div id="imgErrorMessage" class="absolute inset-0 flex flex-col items-center justify-center text-center p-4 bg-stone-100 text-stone-400 z-0 ${errorHiddenClass}">
                             <i data-lucide="image-off" class="w-8 h-8 mb-2 text-stone-300"></i>
                             <span class="text-[11px] leading-relaxed px-2 font-medium">找不到大圖檔！<br>請將該組大圖命名為：<br><strong class="text-[#8B735B] font-mono">${bigImgName}</strong><br>並與此網頁放在同個資料夾</span>
@@ -326,11 +355,6 @@
                         
                         <div class="bg-stone-50/60 p-4 rounded-2xl border border-stone-100 space-y-2.5">
                             <div class="text-xs font-bold text-stone-400 uppercase tracking-wider mb-1">隊長訊息線索</div>
-                            <div class="flex items-center gap-2 text-stone-700">
-                                <i data-lucide="user" class="w-4 h-4 text-[#8B735B]"></i>
-                                <span class="text-xs text-stone-400">姓名：</span>
-                                <span class="font-bold text-sm">${state.user.leaderName}</span>
-                            </div>
                             <div class="flex items-center gap-2 text-stone-700">
                                 <i data-lucide="phone" class="w-4 h-4 text-[#8A9A5B]"></i>
                                 <span class="text-xs text-stone-400">電話：</span>
